@@ -2,7 +2,7 @@ import glob
 import pandas as pd
 import numpy as np
 import os
-
+import glob
 
 RUTA_ENTRADA = os.path.join("data", "raw", "ECU911", "dataset")
 RUTA_SALIDA = os.path.join("data", "raw", "ECU911", "ecu911_unificado.csv")
@@ -102,6 +102,57 @@ for col in cols_texto:
 df = df.rename(columns={
     "Cod_Parroquia": "cod_parroquia"
 })
+
+if "cod_parroquia" in df.columns:
+    df["cod_parroquia"] = (
+        df["cod_parroquia"]
+        .astype(str)
+        .str.replace(".0", "", regex=False)
+        .str.zfill(6)
+    )
+
+#Cargar catalogo de parroquias
+catalogo = pd.read_csv(
+    RUTA_CATALOGO,
+    dtype={"cod_parroquia": str}
+)
+
+# Unir con catálogo para obtener lat/lon
+df = df.merge(catalogo, on="cod_parroquia", how="left")
+
+
+#Limpieza de latitud y longitud
+df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+
+df = df.dropna(subset=["lat", "lon"])
+df = df[(df["lat"] != 0) & (df["lon"] != 0)]
+
+print(f"Registros con coordenadas válidas: {len(df)}")
+
+#Grid Espacial
+df["lat_grid"] = df["lat"].round(3)
+df["lon_grid"] = df["lon"].round(3)
+
+#Features Temporales
+df["mes"] = df["fecha_dt"].dt.month
+df["dia"] = df["fecha_dt"].dt.day
+df["dia_semana"] = df["fecha_dt"].dt.dayofweek
+
+
+# TARGET: Conteo de llamadas
+df_group = (
+    df.groupby(["lat_grid", "lon_grid", "fecha_dt"])
+    .size()
+    .reset_index(name="conteo_llamadas_riesgo")
+)
+
+df = df.merge(
+    df_group,
+    on=["lat_grid", "lon_grid", "fecha_dt"],
+    how="left"
+)
+
 
 if "cod_parroquia" in df.columns:
     df["cod_parroquia"] = (
