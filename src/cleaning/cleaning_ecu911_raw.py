@@ -6,7 +6,9 @@ import os
 
 RUTA_ENTRADA = os.path.join("data", "raw", "ECU911", "dataset")
 RUTA_SALIDA = os.path.join("data", "raw", "ECU911", "ecu911_unificado.csv")
-
+RUTA_CATALOGO = os.path.join(
+    "data", "processed", "catalogo_parroquias_ecuador.csv"
+)
 
 
 patron_busqueda = os.path.join(RUTA_ENTRADA, "*.csv")
