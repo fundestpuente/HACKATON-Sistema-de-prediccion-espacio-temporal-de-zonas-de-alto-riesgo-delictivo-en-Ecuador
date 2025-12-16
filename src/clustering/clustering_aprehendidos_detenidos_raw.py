@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.cluster import DBSCAN
+import joblib
 
 # --- Carga de Archivo ---
 ruta_entrada = os.path.join(
@@ -22,6 +23,9 @@ df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
 df['hora'] = df['fecha_dt'].dt.hour
 df['dia_semana'] = df['fecha_dt'].dt.dayofweek
 
+
+
+
 # --- Latitud y Longitud ---
 # Limites aproximados de Ecuador Continental
 lat_min, lat_max = -6, 2
@@ -35,6 +39,9 @@ df_clean = df[
 
 print(f"Registros originales: {len(df)}")
 print(f"Registros limpios: {len(df_clean)}")
+
+
+
 
 # --- Clustering ---
 coords = df_clean[['latitud', 'longitud']]
@@ -51,33 +58,20 @@ df_clean['cluster'] = db.fit_predict(coords_rad)
 n_clusters = len(set(df_clean['cluster'])) - (1 if -1 in df_clean['cluster'] else 0)
 print(f"Número de clusters encontrados: {n_clusters}")
 
-# Mapeo de cantones por cada cluster
-mapeo_cantones = df_clean[df_clean['cluster'] != -1].groupby('cluster')['nombre_canton'].agg(lambda x: x.mode()[0]).to_dict()
+# Resumen del cluster
+resumen_estrategico = df_clean[df_clean['cluster'] != -1].groupby('cluster').agg({
+    'presunta_infraccion': lambda x: x.mode()[0], # Delito más común
+    'nombre_canton': lambda x: x.mode()[0],       # Cantón principal
+    'hora': 'mean',                               # Hora promedio
+    'latitud': 'mean',                            # Centro Y
+    'longitud': 'mean'                            # Centro X
+}).rename(columns={'presunta_infraccion': 'delito_top', 'nombre_canton': 'ubicacion_top'})
+
+# Conteo de registros
+resumen_estrategico['total_detenciones'] = df_clean['cluster'].value_counts()
 
 
-# Calcular la proporción del delito más frecuente por cada cluster
-dominancia = df_clean.groupby('cluster')['presunta_infraccion'].value_counts(normalize=True).unstack(fill_value=0)
-dominancia['max_dominancia'] = dominancia.max(axis=1)
-dominancia['delito_principal'] = dominancia.idxmax(axis=1)
 
-dominancia['nombre_canton'] = dominancia.index.map(mapeo_cantones)
-# Filtrar solo clusters reales y ver los que tienen más del 60% de especialización
-especializados = dominancia[
-    (dominancia.index != -1) & 
-    (dominancia['max_dominancia'] > 0.6)
-][['nombre_canton', 'delito_principal', 'max_dominancia']]
-
-# Orden por nivel de dominancia
-especializados = especializados.sort_values(by='max_dominancia', ascending=False)
-ruta_especializados = os.path.join(
-    "data",
-    "processed",
-    "clusters_con_delitos_especializados_por_Canton.csv"
-)
-os.makedirs(os.path.dirname(ruta_especializados), exist_ok=True)
-especializados.to_csv(ruta_especializados)
-
-print("Archivo 'clusters_con_delitos_especializados_por_Canton.csv' con existo!")
 
 # --- Visualizacion ---
 
@@ -185,3 +179,21 @@ ruta_grafico_2 = os.path.join(
 os.makedirs(os.path.dirname(ruta_grafico_2), exist_ok=True)
 plt.savefig(ruta_grafico_2)
 print("Gráfico de Perfil Temporal guardado!")
+
+
+
+
+# --- Artefactos ---
+ruta_modelo = os.path.join("model", "modelo_dbscan_detenciones.joblib")
+ruta_perfiles = os.path.join("model", "perfiles_clusters_detenciones.joblib")
+
+os.makedirs(os.path.dirname(ruta_modelo), exist_ok=True)
+
+# Guardado del modelo DBSCANperfiles_clusters_detenciones.joblib
+joblib.dump(db, ruta_modelo)
+print("Modelo DBSCAN guardado exitosamente.")
+
+# Guardado del resument estrategico
+perfiles_clusters = resumen_estrategico.to_dict(orient='index')
+joblib.dump(perfiles_clusters, ruta_perfiles)
+print("Perfiles de los Clusters guardado exitosamente.")
