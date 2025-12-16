@@ -1,13 +1,12 @@
+import glob
 import pandas as pd
 import numpy as np
 import os
-import glob
+
 
 RUTA_ENTRADA = os.path.join("data", "raw", "ECU911", "dataset")
 RUTA_SALIDA = os.path.join("data", "raw", "ECU911", "ecu911_unificado.csv")
-RUTA_CATALOGO = os.path.join(
-    "data", "processed", "catalogo_parroquias_ecuador.csv"
-)
+
 
 
 patron_busqueda = os.path.join(RUTA_ENTRADA, "*.csv")
@@ -98,6 +97,9 @@ for col in cols_texto:
     else:
         print(f"   [!] Advertencia: La columna '{col}' no se encontró en el archivo.")
 
+df = df.rename(columns={
+    "Cod_Parroquia": "cod_parroquia"
+})
 
 if "cod_parroquia" in df.columns:
     df["cod_parroquia"] = (
