@@ -30,8 +30,8 @@ lat_min, lat_max = -6, 2
 lon_min, lon_max = -82, -74
 
 df_clean = df[
-    (df['latitud'] >= lat_min) & (df['latitud'] <= lat_max) &
-    (df['longitud'] >= lon_min) & (df['longitud'] <= lon_max)
+    (df['lat_grid'] >= lat_min) & (df['lat_grid'] <= lat_max) &
+    (df['lon_grid'] >= lon_min) & (df['lon_grid'] <= lon_max)
 ].copy()
 
 print(f"Registros originales: {len(df)}")
@@ -39,23 +39,24 @@ print(f"Registros limpios: {len(df_clean)}")
 
 
 # Clustering Espacial (DBSCAN)
-coords = df_clean[['latitud', 'longitud']]
+coords = df_clean[['lat_grid', 'lon_grid']]
 coords_rad = np.radians(coords)
 
+
 kms_per_radian = 6371.0088
-epsilon = 0.5 / kms_per_radian  # 500 metros
+epsilon = 1.0 / kms_per_radian   # 1 km
 
 db = DBSCAN(
     eps=epsilon,
-    min_samples=10,
-    algorithm='ball_tree',
-    metric='haversine'
+    min_samples=30,
+    metric='haversine',
+    algorithm='ball_tree'
 )
 
 df_clean['cluster'] = db.fit_predict(coords_rad)
 
 n_clusters = len(set(df_clean['cluster'])) - (1 if -1 in df_clean['cluster'] else 0)
-print(f"Número de clusters encontrados: {n_clusters}")
+print(f"Clusters encontrados: {n_clusters}")
 
 
 # Resumen Estratégico por Cluster
