@@ -578,368 +578,273 @@
         </div>
     </div>
 
+    <!-- Modal diagnostico-->
+    <div id="modalDiagnostico" style="display:none; position:fixed; z-index:3000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
+        <div style="background:white; padding:30px; border-radius:15px; max-width:500px; width:90%; position:relative; box-shadow:0 5px 30px rgba(0,0,0,0.3);">
+            <span onclick="cerrarModal()" style="position:absolute; top:15px; right:20px; font-size:24px; cursor:pointer; color:#999;">&times;</span>
+            <h3 style="color:#4338ca; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-microscope"></i> Análisis Histórico del Cluster
+            </h3>
+            <div id="contenidoDiagnostico">
+                </div>
+            <button onclick="cerrarModal()" style="margin-top:20px; width:100%; padding:10px; background:#4338ca; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">Entendido</button>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script>
-        // Zonas cargadas dinámicamente desde el backend
-        let ZONAS = {};
-        let zonasCargadas = false;
+    // Zonas cargadas dinámicamente desde el backend
+    let ZONAS = {};
+    let zonasCargadas = false;
 
-        // Inicializar mapa
-        const map = L.map('map', {
-            center: [-1.8312, -78.1834], // Centro de Ecuador
-            zoom: 7,
-            zoomControl: true
-        });
+    // Inicializar mapa
+    const map = L.map('map', {
+        center: [-1.8312, -78.1834], // Centro de Ecuador
+        zoom: 7,
+        zoomControl: true
+    });
 
-        const capaBaseClara = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap contributors © CARTO',
-            maxZoom: 19
-        });
+    const capaBaseClara = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 19
+    });
 
-        const capaBaseOscura = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap contributors © CARTO',
-            maxZoom: 19
-        });
+    const capaBaseOscura = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 19
+    });
 
-        let capaBaseActiva = capaBaseClara.addTo(map);
+    let capaBaseActiva = capaBaseClara.addTo(map);
 
-        let heatLayer = null;
-        let markersLayer = null;
-        let ultimaPrediccion = null;
-        let puntosProcesados = [];
-        let limitesActuales = null;
+    let heatLayer = null;
+    let markersLayer = null;
+    let ultimaPrediccion = null;
+    let puntosProcesados = [];
+    let limitesActuales = null;
 
-        // Poblar selector de zonas desde el backend para no duplicar configuración
-        const selectZona = document.getElementById('zona');
-        async function cargarZonas() {
-            try {
-                const response = await fetch('http://localhost:5000/api/zonas');
-                if (!response.ok) throw new Error('No se pudieron cargar las zonas');
-                const data = await response.json();
-                ZONAS = data.detalles || {};
-                selectZona.innerHTML = '<option value="">Selecciona una zona...</option>';
-                (data.zonas || Object.keys(ZONAS)).forEach(zona => {
-                    const option = document.createElement('option');
-                    option.value = zona;
-                    option.textContent = zona;
-                    selectZona.appendChild(option);
-                });
-                zonasCargadas = true;
-            } catch (error) {
-                console.error('Error cargando zonas:', error);
-                alert('No se pudieron cargar las zonas desde el backend. Verifica la API.');
-            }
+    // Poblar selector de zonas
+    const selectZona = document.getElementById('zona');
+    async function cargarZonas() {
+        try {
+            const response = await fetch('http://localhost:5000/api/zonas');
+            if (!response.ok) throw new Error('No se pudieron cargar las zonas');
+            const data = await response.json();
+            ZONAS = data.detalles || {};
+            selectZona.innerHTML = '<option value="">Selecciona una zona...</option>';
+            (data.zonas || Object.keys(ZONAS)).forEach(zona => {
+                const option = document.createElement('option');
+                option.value = zona;
+                option.textContent = zona;
+                selectZona.appendChild(option);
+            });
+            zonasCargadas = true;
+        } catch (error) {
+            console.error('Error cargando zonas:', error);
+        }
+    }
+
+    document.getElementById('fecha').valueAsDate = new Date();
+    cargarZonas();
+
+    function togglePanel() {
+        document.getElementById('sidePanel').classList.toggle('hidden');
+    }
+
+    function formatearNumero(valor) {
+        return Number(valor).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+    }
+
+    // --- FUNCIONES CORE MODIFICADAS ---
+
+    async function generarPrediccion() {
+        const fecha = document.getElementById('fecha').value;
+        const zona = document.getElementById('zona').value;
+
+        if (!fecha || !zona) {
+            alert('⚠️ Por favor, selecciona una fecha y una zona válidas.');
+            return;
         }
 
-        // Establecer fecha de hoy por defecto
-        document.getElementById('fecha').valueAsDate = new Date();
+        document.getElementById('welcomeScreen').style.display = 'none';
+        document.getElementById('loadingOverlay').classList.add('active');
 
-        // Cargar zonas al iniciar
-        cargarZonas();
-
-        // Toggle panel
-        function togglePanel() {
-            const panel = document.getElementById('sidePanel');
-            panel.classList.toggle('hidden');
-        }
-
-        function formatearNumero(valor) {
-            return Number(valor).toLocaleString('es-ES', { maximumFractionDigits: 3 });
-        }
-
-        // Generar predicción (conectada con backend Python)
-        async function generarPrediccion() {
-            const fecha = document.getElementById('fecha').value;
-            const zona = document.getElementById('zona').value;
-
-            if (!fecha || !zona) {
-                alert('⚠️ Por favor, selecciona una fecha y una zona válidas.');
-                return;
-            }
-
-            if (!zonasCargadas) {
-                alert('Las zonas aún no se cargan desde el backend. Intenta nuevamente en unos segundos.');
-                return;
-            }
-
-            // Ocultar pantalla de bienvenida
-            document.getElementById('welcomeScreen').style.display = 'none';
-
-            // Mostrar loading
-            document.getElementById('loadingOverlay').classList.add('active');
-
-            try {
-                // Llamada real al backend Python
-                const response = await fetch('http://localhost:5000/api/predecir', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        fecha: fecha,
-                        zona: zona
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Error del servidor: ${response.status}`);
-                }
-
-                const resultado = await response.json();
-
-                // Validar que hay datos
-                if (!resultado.datos || resultado.datos.length === 0) {
-                    alert('❌ No hay datos disponibles para esta zona y fecha.');
-                    document.getElementById('loadingOverlay').classList.remove('active');
-                    return;
-                }
-
-                // Obtener límites de la zona
-                const limites = ZONAS[zona];
-                if (!limites) {
-                    throw new Error('No se encontraron límites para la zona seleccionada');
-                }
-
-                ultimaPrediccion = {
-                    zona,
-                    fecha,
-                    datos: resultado.datos,
-                    puntos: resultado.puntos,
-                    limites
-                };
-
-                // Actualizar mapa con datos reales y filtros
-                actualizarMapa(resultado.datos, limites);
-
-                // Mostrar panel y botón toggle
-                document.getElementById('sidePanel').classList.remove('hidden');
-                document.querySelector('.toggle-button').style.display = 'block';
-
-            } catch (error) {
-                console.error('Error al generar predicción:', error);
-                alert(' Error al conectar con el servidor. Asegúrate de que el backend esté ejecutándose.\n\nDetalles: ' + error.message);
-            } finally {
-                // Ocultar loading
-                document.getElementById('loadingOverlay').classList.remove('active');
-            }
-        }
-
-        function actualizarMapa(datos, limites) {
-            // Extraer intensidades sin normalizar
-            const intensidades = datos.map(d => d[2]);
-
-            //  Calcular percentiles P10 y P90 para definir rango de riesgo
-            const sorted = intensidades.slice().sort((a, b) => a - b);
-            const p10 = sorted[Math.floor(0.10 * (sorted.length - 1))];
-            const p90 = sorted[Math.floor(0.90 * (sorted.length - 1))];
-
-            let riesgoMin = p10;
-            let riesgoMax = p90;
-
-            if (riesgoMax <= riesgoMin) {
-                riesgoMax = riesgoMin + 1e-6;
-            }
-
-            // Generar puntos procesados con riesgo normalizado para reutilizar en filtros
-            puntosProcesados = datos.map(d => {
-                const riesgoNormalizado = Math.max(0, Math.min(1, (d[2] - riesgoMin) / (riesgoMax - riesgoMin)));
-                return {
-                    lat: d[0],
-                    lon: d[1],
-                    riesgoOriginal: d[2],
-                    riesgoNormalizado
-                };
+        try {
+            const response = await fetch('http://localhost:5000/api/predecir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha, zona })
             });
 
-            limitesActuales = limites;
+            if (!response.ok) throw new Error(`Error: ${response.status}`);
+            const resultado = await response.json();
 
+            if (!resultado.datos || resultado.datos.length === 0) {
+                alert('❌ No hay datos disponibles.');
+                return;
+            }
+
+            // 1. MAPEAR Y ORDENAR INMEDIATAMENTE (De mayor a menor riesgo)
+            puntosProcesados = resultado.datos.map(d => ({
+                lat: d[0],
+                lon: d[1],
+                riesgoNormalizado: d[2]
+            })).sort((a, b) => b.riesgoNormalizado - a.riesgoNormalizado);
+
+            limitesActuales = ZONAS[zona];
+            ultimaPrediccion = { zona, fecha, datos: puntosProcesados };
+
+            // 2. ACTUALIZAR VISUALIZACIÓN
             renderizarMapaFiltrado();
+            
+            document.getElementById('sidePanel').classList.remove('hidden');
+            document.querySelector('.toggle-button').style.display = 'block';
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al conectar con el servidor.');
+        } finally {
+            document.getElementById('loadingOverlay').classList.remove('active');
         }
+    }
 
-        function renderizarMapaFiltrado() {
-            if (!puntosProcesados.length || !limitesActuales || !ultimaPrediccion) return;
+    function renderizarMapaFiltrado() {
+        if (!puntosProcesados.length || !limitesActuales) return;
 
-            const datosFiltrados = obtenerDatosFiltrados();
+        const umbral = parseFloat(document.getElementById('filtroRiesgo').value || '0');
+        const datosFiltrados = puntosProcesados.filter(p => p.riesgoNormalizado >= umbral);
 
-            // Eliminar capas anteriores
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
-            }
-            if (markersLayer) {
-                map.removeLayer(markersLayer);
-            }
+        // Limpiar capas
+        if (heatLayer) map.removeLayer(heatLayer);
+        if (markersLayer) map.removeLayer(markersLayer);
 
-            if (!datosFiltrados.length) {
-                document.getElementById('infoPuntos').textContent = '0';
-                document.getElementById('hotspotList').innerHTML = '<p class="hotspot-meta">No hay puntos con el riesgo seleccionado.</p>';
-                document.getElementById('statMax').textContent = '-';
-                document.getElementById('statAvg').textContent = '-';
-                document.getElementById('statP90').textContent = '-';
-                return;
-            }
+        if (!datosFiltrados.length) return;
 
-            const heatData = datosFiltrados.map(p => [p.lat, p.lon, p.riesgoNormalizado]);
+        // Capa de calor
+        const heatData = datosFiltrados.map(p => [p.lat, p.lon, p.riesgoNormalizado]);
+        heatLayer = L.heatLayer(heatData, {
+            radius: 20, blur: 15, maxOpacity: 0.8,
+            gradient: { 0.2: 'blue', 0.4: 'lime', 0.6: 'yellow', 0.8: 'orange', 1.0: 'red' }
+        }).addTo(map);
 
-            // Heatmap con parámetros que EVITAN saturación roja
-            heatLayer = L.heatLayer(heatData, {
-                radius: 18,
-                blur: 15,
-                minZoom: 10,
-                maxZoom: 16,
-                minOpacity: 0.15,
-                maxOpacity: 1.0,
-                gradient: {
-                    0.0: '#0000ff',
-                    0.2: '#00ffff',
-                    0.4: '#00ff00',
-                    0.6: '#ffff00',
-                    0.8: '#ff8800',
-                    1.0: '#ff0000'
-                }
-            }).addTo(map);
+        // Capa de marcadores (DIBUJAR AL REVÉS PARA QUE EL ROJO QUEDE ENCIMA)
+        markersLayer = L.layerGroup();
+        [...datosFiltrados].reverse().forEach((punto) => {
+            const color = obtenerColor(punto.riesgoNormalizado);
+            const marker = L.circleMarker([punto.lat, punto.lon], {
+                radius: 5 + (punto.riesgoNormalizado * 7),
+                fillColor: color,
+                color: '#000',
+                weight: 0.5,
+                fillOpacity: 0.8
+            }).on('click', () => ejecutarDiagnostico(punto.lat, punto.lon));
+            
+            markersLayer.addLayer(marker);
+        });
+        markersLayer.addTo(map);
 
-            // Capa de marcadores
-            markersLayer = L.layerGroup();
-            datosFiltrados.forEach((punto, index) => {
-                const marker = L.circleMarker([punto.lat, punto.lon], {
-                    radius: Math.max(6, punto.riesgoNormalizado * 16),
-                    fillColor: obtenerColor(punto.riesgoNormalizado),
-                    color: '#111827',
-                    weight: 1,
-                    fillOpacity: 0.85
-                }).bindPopup(`<strong>Riesgo:</strong> ${(punto.riesgoNormalizado * 100).toFixed(1)}%<br><small>Punto ${index + 1}</small>`);
-                markersLayer.addLayer(marker);
+        // Centrado automático
+        const center = [(limitesActuales.lat_min + limitesActuales.lat_max) / 2, 
+                        (limitesActuales.lon_min + limitesActuales.lon_max) / 2];
+        map.setView(center, 12);
+
+        // Actualizar UI lateral
+        actualizarPanel(ultimaPrediccion.zona, ultimaPrediccion.fecha, datosFiltrados.length);
+        renderizarHotspots(datosFiltrados);
+        actualizarEstadisticas(datosFiltrados);
+    }
+
+    function obtenerColor(v) {
+        if (v > 0.8) return '#ff0000'; // Crítico
+        if (v > 0.5) return '#ff8800'; // Alto
+        if (v > 0.2) return '#ffff00'; // Medio
+        return '#00bbff';             // Bajo
+    }
+
+    function renderizarHotspots(datos) {
+        const contenedor = document.getElementById('hotspotList');
+        contenedor.innerHTML = '';
+        // Tomar los 5 primeros (ya vienen ordenados por el sort de generarPrediccion)
+        datos.slice(0, 5).forEach((punto, idx) => {
+            const item = document.createElement('div');
+            item.className = 'hotspot-item';
+            item.innerHTML = `
+                <div class="hotspot-info">
+                    <div class="hotspot-title">Punto Crítico #${idx + 1}</div>
+                    <div class="hotspot-meta">Riesgo ${(punto.riesgoNormalizado * 100).toFixed(1)}%</div>
+                </div>
+                <button class="btn-sm" onclick="ejecutarDiagnostico(${punto.lat}, ${punto.lon})">
+                    <i class="fas fa-search-location"></i> Analizar
+                </button>`;
+            contenedor.appendChild(item);
+        });
+    }
+
+    async function ejecutarDiagnostico(lat, lon) {
+        map.setView([lat, lon], 15);
+        const contenido = document.getElementById('contenidoDiagnostico');
+        contenido.innerHTML = '<div style="text-align:center"><i class="fas fa-spinner fa-spin"></i> Analizando cluster...</div>';
+        document.getElementById('modalDiagnostico').style.display = 'flex';
+
+        try {
+            const response = await fetch('http://localhost:5000/api/diagnosticar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lon })
             });
-            document.getElementById('btnToggleMarkers').dataset.visible = 'true';
-            document.getElementById('btnToggleMarkers').innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar puntos';
-            markersLayer.addTo(map);
+            const res = await response.json();
 
-            // Centrar mapa en la zona
-            const centerLat = (limitesActuales.lat_min + limitesActuales.lat_max) / 2;
-            const centerLon = (limitesActuales.lon_min + limitesActuales.lon_max) / 2;
-            map.setView([centerLat, centerLon], 10);
-
-            actualizarPanel(ultimaPrediccion.zona, ultimaPrediccion.fecha, datosFiltrados.length);
-            renderizarHotspots(datosFiltrados);
-            actualizarEstadisticas(datosFiltrados);
-        }
-
-        function obtenerDatosFiltrados() {
-            const umbral = parseFloat(document.getElementById('filtroRiesgo').value || '0');
-            return puntosProcesados.filter(p => p.riesgoNormalizado >= umbral);
-        }
-
-        function aplicarFiltroRiesgo() {
-            if (!puntosProcesados.length) return;
-            renderizarMapaFiltrado();
-        }
-
-
-
-
-        
-
-
-
-        // Actualizar panel de información
-        function actualizarPanel(zona, fecha, puntos) {
-            document.getElementById('infoZona').textContent = zona;
-            document.getElementById('infoFecha').textContent = new Date(fecha + 'T00:00:00').toLocaleDateString('es-ES');
-            document.getElementById('infoPuntos').textContent = puntos.toLocaleString('es-ES');
-        }
-
-        function obtenerColor(valor) {
-            if (valor >= 0.8) return '#ff0000';
-            if (valor >= 0.6) return '#ff8800';
-            if (valor >= 0.4) return '#ffff00';
-            if (valor >= 0.2) return '#00ff00';
-            return '#00ffff';
-        }
-
-        function renderizarHotspots(datos) {
-            const contenedor = document.getElementById('hotspotList');
-            contenedor.innerHTML = '';
-
-            const ordenados = [...datos].sort((a, b) => b.riesgoNormalizado - a.riesgoNormalizado).slice(0, 5);
-
-            ordenados.forEach((punto, idx) => {
-                const item = document.createElement('div');
-                item.className = 'hotspot-item';
-
-                const info = document.createElement('div');
-                info.className = 'hotspot-info';
-                info.innerHTML = `
-                    <div class="hotspot-title">Punto #${idx + 1}</div>
-                    <div class="hotspot-meta">Riesgo ${(punto.riesgoNormalizado * 100).toFixed(1)}% • ${punto.lat.toFixed(3)}, ${punto.lon.toFixed(3)}</div>
-                `;
-
-                const btn = document.createElement('button');
-                btn.className = 'btn-sm';
-                btn.innerHTML = '<i class="fas fa-crosshairs"></i> Centrar';
-                btn.onclick = () => map.setView([punto.lat, punto.lon], 12);
-
-                item.appendChild(info);
-                item.appendChild(btn);
-                contenedor.appendChild(item);
-            });
-        }
-
-        function actualizarEstadisticas(datos) {
-            if (!datos.length) return;
-
-            const intensidades = datos.map(d => d.riesgoNormalizado);
-            const max = Math.max(...intensidades);
-            const avg = intensidades.reduce((a, b) => a + b, 0) / intensidades.length;
-            const sorted = intensidades.slice().sort((a, b) => a - b);
-            const p90 = sorted[Math.floor(0.9 * (sorted.length - 1))];
-
-            document.getElementById('statMax').textContent = formatearNumero(max * 100) + '%';
-            document.getElementById('statAvg').textContent = formatearNumero(avg * 100) + '%';
-            document.getElementById('statP90').textContent = formatearNumero(p90 * 100) + '%';
-
-            if (ultimaPrediccion) {
-                ultimaPrediccion.stats = { max, avg, p90 };
-            }
-        }
-
-        function exportarCSV() {
-            if (!ultimaPrediccion) {
-                alert('Genera una predicción antes de exportar.');
-                return;
-            }
-
-            const encabezados = ['latitud', 'longitud', 'riesgo_normalizado'];
-            const filas = ultimaPrediccion.datos.map(p => [p[0], p[1], p[2]]);
-            const contenido = [encabezados.join(','), ...filas.map(f => f.join(','))].join('\n');
-
-            const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `prediccion_${ultimaPrediccion.zona}_${ultimaPrediccion.fecha}.csv`;
-            link.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function alternarMarcadores() {
-            if (!markersLayer) return;
-            const btn = document.getElementById('btnToggleMarkers');
-            const visible = btn.dataset.visible === 'true';
-
-            if (visible) {
-                map.removeLayer(markersLayer);
-                btn.dataset.visible = 'false';
-                btn.innerHTML = '<i class="fas fa-map-pin"></i> Mostrar puntos';
+            if (res.encontrado) {
+                const p = res.perfil;
+                contenido.innerHTML = `
+                    <div style="display:grid; gap:10px;">
+                        <div class="info-item" style="border-left:4px solid #f59e0b; background:#fff8eb; padding:10px;">
+                            <small>DELITO PREDOMINANTE</small>
+                            <div style="font-weight:bold; color:#b45309;">${p.delito_top}</div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                            <div class="stat-card"><strong>Detenciones</strong><br>${p.total_detenciones}</div>
+                            <div class="stat-card"><strong>Hora Pico</strong><br>${Math.floor(p.hora)}:00h</div>
+                        </div>
+                        <div class="info-item" style="border-left:4px solid #10b981; background:#f0fdf4; padding:10px;">
+                            <small>ZONA REFERENCIA</small>
+                            <div>${p.ubicacion_top}</div>
+                        </div>
+                    </div>`;
             } else {
-                markersLayer.addTo(map);
-                btn.dataset.visible = 'true';
-                btn.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar puntos';
+                contenido.innerHTML = '<p style="text-align:center">No se encontraron patrones históricos en este punto.</p>';
             }
+        } catch (e) {
+            contenido.innerHTML = '<p style="color:red">Error al consultar diagnóstico.</p>';
         }
+    }
 
-        document.getElementById('filtroRiesgo').value = '0';
-    </script>
+    // Funciones auxiliares restantes
+    function aplicarFiltroRiesgo() { renderizarMapaFiltrado(); }
+    function cerrarModal() { document.getElementById('modalDiagnostico').style.display = 'none'; }
+    function actualizarPanel(z, f, p) {
+        document.getElementById('infoZona').textContent = z;
+        document.getElementById('infoFecha').textContent = f;
+        document.getElementById('infoPuntos').textContent = p;
+    }
+    function actualizarEstadisticas(datos) {
+        if (!datos.length) return;
+        const risks = datos.map(p => p.riesgoNormalizado);
+        document.getElementById('statMax').textContent = formatearNumero(Math.max(...risks) * 100) + '%';
+        document.getElementById('statAvg').textContent = formatearNumero((risks.reduce((a,b)=>a+b,0)/risks.length)*100) + '%';
+    }
+    function alternarMarcadores() {
+        if (!markersLayer) return;
+        const btn = document.getElementById('btnToggleMarkers');
+        if (map.hasLayer(markersLayer)) {
+            map.removeLayer(markersLayer);
+            btn.innerHTML = '<i class="fas fa-eye"></i> Mostrar puntos';
+        } else {
+            markersLayer.addTo(map);
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar puntos';
+        }
+    }
+</script>
 </body>
 
 </html>

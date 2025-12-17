@@ -79,7 +79,11 @@ def diagnosticar_prediccion(model, profile,lat, lon):
         cluster_id = etiquetas_core[indice_min]
 
         if cluster_id != -1 and cluster_id in profile:
-            perfil = profile[cluster_id]
+            perfil = profile[cluster_id].copy()
+            # Convertir posibles valores numpy a tipos nativos de Python para JSON
+            for k, v in perfil.items():
+                if hasattr(v, 'item'): # Detecta tipos de numpy
+                    perfil[k] = v.item()
             return perfil
     return dict()
 
