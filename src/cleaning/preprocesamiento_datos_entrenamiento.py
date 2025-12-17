@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 #carga datasets
-ruta_padre = os.path.join(os.pardir, os.pardir, "data")
+ruta_padre = "data"
 ruta_procesados = os.path.join(ruta_padre, "processed")
 datos_aprehendidos = os.path.join(ruta_padre,"raw","detenidosaprehendidos", "aprehendidos_detenidos_raw.csv")
 datos_911 = os.path.join(ruta_padre,"raw", "ecu911" ,"ecu911_unificado.csv")

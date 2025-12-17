@@ -3,7 +3,7 @@ import glob
 import os
 
 #carga de dataset ecu911
-ruta_padre = os.path.join(os.pardir, os.pardir, "data")
+ruta_padre = "data"
 ruta_datos_originales = os.path.join(ruta_padre, "raw", "ecu911", "dataset")
 archivos_csv = glob.glob(os.path.join(ruta_datos_originales, "*.csv"))
 catalogo_parroquias = os.path.join(ruta_padre, "processed","catalogo_parroquias_ecuador.csv")
