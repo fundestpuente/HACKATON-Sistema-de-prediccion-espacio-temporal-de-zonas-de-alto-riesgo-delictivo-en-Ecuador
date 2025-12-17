@@ -14,7 +14,7 @@ ruta_entrada = os.path.join(
     "ecu911_unificado.csv"
 )
 
-df = pd.read_csv(ruta_entrada, sep=';', encoding='latin1')
+df = pd.read_csv(ruta_entrada)
 
 # Conversión de tipo de dato
 df['fecha_dt'] = pd.to_datetime(df['fecha_dt'])
@@ -67,8 +67,8 @@ resumen_estrategico = (
         'tipo_evento': lambda x: x.mode()[0],   # Evento dominante
         'canton': lambda x: x.mode()[0],        # Cantón principal
         'hora': 'mean',                         # Hora promedio
-        'latitud': 'mean',                      # Centroide Y
-        'longitud': 'mean'                      # Centroide X
+        'lat_grid': 'mean',                      # Centroide Y
+        'lon_grid': 'mean'                      # Centroide X
     })
     .rename(columns={
         'tipo_evento': 'evento_top',
@@ -231,3 +231,17 @@ perfiles_clusters = resumen_estrategico.to_dict(orient='index')
 joblib.dump(perfiles_clusters, ruta_perfiles)
 print("Perfiles de clusters ECU911 guardados exitosamente.")
 
+# --- Artefactos ---
+ruta_modelo = os.path.join("model", "modelo_dbscan_ecu911.joblib")
+ruta_perfiles = os.path.join("model", "perfiles_clusters_ecu911.joblib")
+
+os.makedirs(os.path.dirname(ruta_modelo), exist_ok=True)
+
+# Guardado del modelo DBSCANperfiles_clusters_ecu911.joblib
+joblib.dump(db, ruta_modelo)
+print("Modelo DBSCAN guardado exitosamente.")
+
+# Guardado del resumen estrategico
+perfiles_clusters = resumen_estrategico.to_dict(orient='index')
+joblib.dump(perfiles_clusters, ruta_perfiles)
+print("Perfiles de los Clusters guardado exitosamente.")
