@@ -8,7 +8,7 @@ ruta_datos_originales = os.path.join(ruta_padre, "raw", "ecu911", "dataset")
 archivos_csv = glob.glob(os.path.join(ruta_datos_originales, "*.csv"))
 catalogo_parroquias = os.path.join(ruta_padre, "processed","catalogo_parroquias_ecuador.csv")
 
-nombre_datos_procesados = os.path.join(ruta_padre,"processed","ecu911_limpio_final.csv")
+nombre_datos_procesados = os.path.join(ruta_padre,"raw","ecu911","ecu911_unificado.csv")
 
 lista_dfs = []
 
