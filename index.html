@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Predicción Delictiva</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Mapa a pantalla completa */
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Controles flotantes superiores */
+        .floating-controls {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            max-width: 90%;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group i {
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .floating-controls input,
+        .floating-controls select {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .floating-controls input:focus,
+        .floating-controls select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .floating-controls select {
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .btn-predict {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-predict:active {
+            transform: translateY(0);
+        }
+
+        /* Panel lateral */
+        .side-panel {
+            position: absolute;
+            left: 20px;
+            top: 100px;
+            width: 320px;
+            max-height: calc(100vh - 140px);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            overflow-y: auto;
+            z-index: 1000;
+            padding: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .side-panel.hidden {
+            transform: translateX(-360px);
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: -20px -20px 20px -20px;
+            text-align: center;
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .panel-header p {
+            margin: 8px 0 0 0;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-item-label {
+            color: #6c757d;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .info-item-value {
+            color: #2c3e50;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .legend {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .legend h4 {
+            color: #2c3e50;
+            font-size: 1rem;
+            margin: 0 0 15px 0;
+            font-weight: 700;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f9f9ff 0%, #eef2ff 100%);
+            border: 1px solid #eef1ff;
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        .stat-title {
+            color: #6b7280;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #111827;
+        }
+
+        .list-section {
+            margin-top: 15px;
+        }
+
+        .list-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hotspot-item, .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+        }
+
+        .hotspot-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hotspot-title {
+            font-weight: 700;
+            color: #111827;
+            font-size: 0.95rem;
+        }
+
+        .hotspot-meta {
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+
+        .btn-sm {
+            border: none;
+            background: #e0e7ff;
+            color: #4338ca;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-sm:hover {
+            background: #4338ca;
+            color: white;
+        }
+
+        .actions-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #eef2ff;
+            color: #4338ca;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.8rem;
+        }
+
+        /* Botón toggle panel */
+        .toggle-button {
+            position: absolute;
+            left: 50px;
+            top: 20px;
+            z-index: 1001;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-button:hover {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Estado inicial */
+        .welcome-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .welcome-screen i {
+            font-size: 5rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .welcome-screen h2 {
+            color: #2c3e50;
+            margin: 15px 0 10px 0;
+            font-size: 1.8rem;
+        }
+
+        .welcome-screen p {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        /* Spinner de carga */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .spinner-icon {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner p {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .floating-controls {
+                flex-direction: column;
+                width: calc(100% - 40px);
+                border-radius: 15px;
+                padding: 15px;
+            }
+
+            .control-group {
+                width: 100%;
+            }
+
+            .floating-controls input,
+            .floating-controls select {
+                width: 100%;
+            }
+
+            .side-panel {
+                width: calc(100% - 40px);
+                top: auto;
+                bottom: 20px;
+                max-height: 50vh;
+            }
+
+            .toggle-button {
+                top: auto;
+                bottom: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Mapa -->
+    <div id="map"></div>
+
+    <!-- Controles flotantes -->
+    <div class="floating-controls">
+        <div class="control-group">
+            <i class="fas fa-calendar-alt"></i>
+            <input type="date" id="fecha" value="">
+        </div>
+        <div class="control-group">
+            <i class="fas fa-map-marked-alt"></i>
+            <select id="zona">
+                <option value="">Selecciona una zona...</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <i class="fas fa-filter"></i>
+            <select id="filtroRiesgo" onchange="aplicarFiltroRiesgo()">
+                <option value="0">Todos los riesgos</option>
+                <option value="0.25">Moderado o mayor</option>
+                <option value="0.5">Medio-alto o mayor</option>
+                <option value="0.75">Solo alto y crítico</option>
+            </select>
+        </div>
+        <button class="btn-predict" onclick="generarPrediccion()">
+            <i class="fas fa-magic"></i> Predecir
+        </button>
+    </div>
+
+    <!-- Botón toggle panel -->
+    <button class="toggle-button" onclick="togglePanel()" style="display: none;">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Panel lateral (oculto inicialmente) -->
+    <div class="side-panel hidden" id="sidePanel">
+        <div class="panel-header">
+            <h2><i class="fas fa-shield-alt"></i> Predicción Delictiva</h2>
+            <p><i class="fas fa-brain"></i> Análisis ML</p>
+        </div>
+
+        <div class="info-item">
+            <div class="info-item-label">Zona Analizada</div>
+            <div class="info-item-value" id="infoZona">-</div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-item-label">Fecha de Predicción</div>
+            <div class="info-item-value" id="infoFecha">-</div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-item-label">Puntos Analizados</div>
+            <div class="info-item-value" id="infoPuntos">-</div>
+        </div>
+
+            <div class="legend">
+                <h4>Interpretación de Colores</h4>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #0000ff;"></div>
+                    <span>Azul - Riesgo muy bajo</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #00ffff;"></div>
+                <span>Cyan - Riesgo bajo</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #00ff00;"></div>
+                <span>Verde - Riesgo moderado</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ffff00;"></div>
+                <span>Amarillo - Riesgo medio-alto</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff8800;"></div>
+                <span>Naranja - Riesgo alto</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff0000;"></div>
+                <span>Rojo - Riesgo crítico</span>
+            </div>
+        </div>
+
+        <div class="list-section">
+            <div class="list-title"><i class="fas fa-chart-line"></i> Resumen de riesgo</div>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-title"><i class="fas fa-bullseye"></i> Pico</div>
+                    <div class="stat-value" id="statMax">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title"><i class="fas fa-wave-square"></i> Promedio</div>
+                    <div class="stat-value" id="statAvg">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title"><i class="fas fa-signal"></i> Percentil 90</div>
+                    <div class="stat-value" id="statP90">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="list-section">
+            <div class="list-title"><i class="fas fa-fire"></i> 5 puntos calientes</div>
+            <div id="hotspotList"></div>
+        </div>
+
+        <div class="list-section">
+            <div class="list-title"><i class="fas fa-folder-plus"></i> Acciones rápidas</div>
+            <div class="actions-row">
+                <button class="btn-sm" onclick="exportarCSV()"><i class="fas fa-file-export"></i> Exportar CSV</button>
+                <button class="btn-sm" onclick="alternarMarcadores()" id="btnToggleMarkers"><i class="fas fa-map-pin"></i> Mostrar puntos</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de bienvenida -->
+    <div class="welcome-screen" id="welcomeScreen">
+        <i class="fas fa-map-marked-alt"></i>
+        <h2>Sistema de Predicción Delictiva</h2>
+        <p>Selecciona una fecha y zona para generar la predicción</p>
+    </div>
+
+    <!-- Overlay de carga -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner">
+            <div class="spinner-icon"></div>
+            <p>🔄 Generando predicción...</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script>
+        // Zonas cargadas dinámicamente desde el backend
+        let ZONAS = {};
+        let zonasCargadas = false;
+
+        // Inicializar mapa
+        const map = L.map('map', {
+            center: [-1.8312, -78.1834], // Centro de Ecuador
+            zoom: 7,
+            zoomControl: true
+        });
+
+        const capaBaseClara = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            maxZoom: 19
+        });
+
+        const capaBaseOscura = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            maxZoom: 19
+        });
+
+        let capaBaseActiva = capaBaseClara.addTo(map);
+
+        let heatLayer = null;
+        let markersLayer = null;
+        let ultimaPrediccion = null;
+        let puntosProcesados = [];
+        let limitesActuales = null;
+
+        // Poblar selector de zonas desde el backend para no duplicar configuración
+        const selectZona = document.getElementById('zona');
+        async function cargarZonas() {
+            try {
+                const response = await fetch('http://localhost:5000/api/zonas');
+                if (!response.ok) throw new Error('No se pudieron cargar las zonas');
+                const data = await response.json();
+                ZONAS = data.detalles || {};
+                selectZona.innerHTML = '<option value="">Selecciona una zona...</option>';
+                (data.zonas || Object.keys(ZONAS)).forEach(zona => {
+                    const option = document.createElement('option');
+                    option.value = zona;
+                    option.textContent = zona;
+                    selectZona.appendChild(option);
+                });
+                zonasCargadas = true;
+            } catch (error) {
+                console.error('Error cargando zonas:', error);
+                alert('No se pudieron cargar las zonas desde el backend. Verifica la API.');
+            }
+        }
+
+        // Establecer fecha de hoy por defecto
+        document.getElementById('fecha').valueAsDate = new Date();
+
+        // Cargar zonas al iniciar
+        cargarZonas();
+
+        // Toggle panel
+        function togglePanel() {
+            const panel = document.getElementById('sidePanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function formatearNumero(valor) {
+            return Number(valor).toLocaleString('es-ES', { maximumFractionDigits: 3 });
+        }
+
+        // Generar predicción (conectada con backend Python)
+        async function generarPrediccion() {
+            const fecha = document.getElementById('fecha').value;
+            const zona = document.getElementById('zona').value;
+
+            if (!fecha || !zona) {
+                alert('⚠️ Por favor, selecciona una fecha y una zona válidas.');
+                return;
+            }
+
+            if (!zonasCargadas) {
+                alert('Las zonas aún no se cargan desde el backend. Intenta nuevamente en unos segundos.');
+                return;
+            }
+
+            // Ocultar pantalla de bienvenida
+            document.getElementById('welcomeScreen').style.display = 'none';
+
+            // Mostrar loading
+            document.getElementById('loadingOverlay').classList.add('active');
+
+            try {
+                // Llamada real al backend Python
+                const response = await fetch('http://localhost:5000/api/predecir', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fecha: fecha,
+                        zona: zona
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status}`);
+                }
+
+                const resultado = await response.json();
+
+                // Validar que hay datos
+                if (!resultado.datos || resultado.datos.length === 0) {
+                    alert('❌ No hay datos disponibles para esta zona y fecha.');
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                    return;
+                }
+
+                // Obtener límites de la zona
+                const limites = ZONAS[zona];
+                if (!limites) {
+                    throw new Error('No se encontraron límites para la zona seleccionada');
+                }
+
+                ultimaPrediccion = {
+                    zona,
+                    fecha,
+                    datos: resultado.datos,
+                    puntos: resultado.puntos,
+                    limites
+                };
+
+                // Actualizar mapa con datos reales y filtros
+                actualizarMapa(resultado.datos, limites);
+
+                // Mostrar panel y botón toggle
+                document.getElementById('sidePanel').classList.remove('hidden');
+                document.querySelector('.toggle-button').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error al generar predicción:', error);
+                alert(' Error al conectar con el servidor. Asegúrate de que el backend esté ejecutándose.\n\nDetalles: ' + error.message);
+            } finally {
+                // Ocultar loading
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
+        }
+
+        function actualizarMapa(datos, limites) {
+            // Extraer intensidades sin normalizar
+            const intensidades = datos.map(d => d[2]);
+
+            //  Calcular percentiles P10 y P90 para definir rango de riesgo
+            const sorted = intensidades.slice().sort((a, b) => a - b);
+            const p10 = sorted[Math.floor(0.10 * (sorted.length - 1))];
+            const p90 = sorted[Math.floor(0.90 * (sorted.length - 1))];
+
+            let riesgoMin = p10;
+            let riesgoMax = p90;
+
+            if (riesgoMax <= riesgoMin) {
+                riesgoMax = riesgoMin + 1e-6;
+            }
+
+            // Generar puntos procesados con riesgo normalizado para reutilizar en filtros
+            puntosProcesados = datos.map(d => {
+                const riesgoNormalizado = Math.max(0, Math.min(1, (d[2] - riesgoMin) / (riesgoMax - riesgoMin)));
+                return {
+                    lat: d[0],
+                    lon: d[1],
+                    riesgoOriginal: d[2],
+                    riesgoNormalizado
+                };
+            });
+
+            limitesActuales = limites;
+
+            renderizarMapaFiltrado();
+        }
+
+        function renderizarMapaFiltrado() {
+            if (!puntosProcesados.length || !limitesActuales || !ultimaPrediccion) return;
+
+            const datosFiltrados = obtenerDatosFiltrados();
+
+            // Eliminar capas anteriores
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+            }
+            if (markersLayer) {
+                map.removeLayer(markersLayer);
+            }
+
+            if (!datosFiltrados.length) {
+                document.getElementById('infoPuntos').textContent = '0';
+                document.getElementById('hotspotList').innerHTML = '<p class="hotspot-meta">No hay puntos con el riesgo seleccionado.</p>';
+                document.getElementById('statMax').textContent = '-';
+                document.getElementById('statAvg').textContent = '-';
+                document.getElementById('statP90').textContent = '-';
+                return;
+            }
+
+            const heatData = datosFiltrados.map(p => [p.lat, p.lon, p.riesgoNormalizado]);
+
+            // Heatmap con parámetros que EVITAN saturación roja
+            heatLayer = L.heatLayer(heatData, {
+                radius: 18,
+                blur: 15,
+                minZoom: 10,
+                maxZoom: 16,
+                minOpacity: 0.15,
+                maxOpacity: 1.0,
+                gradient: {
+                    0.0: '#0000ff',
+                    0.2: '#00ffff',
+                    0.4: '#00ff00',
+                    0.6: '#ffff00',
+                    0.8: '#ff8800',
+                    1.0: '#ff0000'
+                }
+            }).addTo(map);
+
+            // Capa de marcadores
+            markersLayer = L.layerGroup();
+            datosFiltrados.forEach((punto, index) => {
+                const marker = L.circleMarker([punto.lat, punto.lon], {
+                    radius: Math.max(6, punto.riesgoNormalizado * 16),
+                    fillColor: obtenerColor(punto.riesgoNormalizado),
+                    color: '#111827',
+                    weight: 1,
+                    fillOpacity: 0.85
+                }).bindPopup(`<strong>Riesgo:</strong> ${(punto.riesgoNormalizado * 100).toFixed(1)}%<br><small>Punto ${index + 1}</small>`);
+                markersLayer.addLayer(marker);
+            });
+            document.getElementById('btnToggleMarkers').dataset.visible = 'true';
+            document.getElementById('btnToggleMarkers').innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar puntos';
+            markersLayer.addTo(map);
+
+            // Centrar mapa en la zona
+            const centerLat = (limitesActuales.lat_min + limitesActuales.lat_max) / 2;
+            const centerLon = (limitesActuales.lon_min + limitesActuales.lon_max) / 2;
+            map.setView([centerLat, centerLon], 10);
+
+            actualizarPanel(ultimaPrediccion.zona, ultimaPrediccion.fecha, datosFiltrados.length);
+            renderizarHotspots(datosFiltrados);
+            actualizarEstadisticas(datosFiltrados);
+        }
+
+        function obtenerDatosFiltrados() {
+            const umbral = parseFloat(document.getElementById('filtroRiesgo').value || '0');
+            return puntosProcesados.filter(p => p.riesgoNormalizado >= umbral);
+        }
+
+        function aplicarFiltroRiesgo() {
+            if (!puntosProcesados.length) return;
+            renderizarMapaFiltrado();
+        }
+
+
+
+
+        
+
+
+
+        // Actualizar panel de información
+        function actualizarPanel(zona, fecha, puntos) {
+            document.getElementById('infoZona').textContent = zona;
+            document.getElementById('infoFecha').textContent = new Date(fecha + 'T00:00:00').toLocaleDateString('es-ES');
+            document.getElementById('infoPuntos').textContent = puntos.toLocaleString('es-ES');
+        }
+
+        function obtenerColor(valor) {
+            if (valor >= 0.8) return '#ff0000';
+            if (valor >= 0.6) return '#ff8800';
+            if (valor >= 0.4) return '#ffff00';
+            if (valor >= 0.2) return '#00ff00';
+            return '#00ffff';
+        }
+
+        function renderizarHotspots(datos) {
+            const contenedor = document.getElementById('hotspotList');
+            contenedor.innerHTML = '';
+
+            const ordenados = [...datos].sort((a, b) => b.riesgoNormalizado - a.riesgoNormalizado).slice(0, 5);
+
+            ordenados.forEach((punto, idx) => {
+                const item = document.createElement('div');
+                item.className = 'hotspot-item';
+
+                const info = document.createElement('div');
+                info.className = 'hotspot-info';
+                info.innerHTML = `
+                    <div class="hotspot-title">Punto #${idx + 1}</div>
+                    <div class="hotspot-meta">Riesgo ${(punto.riesgoNormalizado * 100).toFixed(1)}% • ${punto.lat.toFixed(3)}, ${punto.lon.toFixed(3)}</div>
+                `;
+
+                const btn = document.createElement('button');
+                btn.className = 'btn-sm';
+                btn.innerHTML = '<i class="fas fa-crosshairs"></i> Centrar';
+                btn.onclick = () => map.setView([punto.lat, punto.lon], 12);
+
+                item.appendChild(info);
+                item.appendChild(btn);
+                contenedor.appendChild(item);
+            });
+        }
+
+        function actualizarEstadisticas(datos) {
+            if (!datos.length) return;
+
+            const intensidades = datos.map(d => d.riesgoNormalizado);
+            const max = Math.max(...intensidades);
+            const avg = intensidades.reduce((a, b) => a + b, 0) / intensidades.length;
+            const sorted = intensidades.slice().sort((a, b) => a - b);
+            const p90 = sorted[Math.floor(0.9 * (sorted.length - 1))];
+
+            document.getElementById('statMax').textContent = formatearNumero(max * 100) + '%';
+            document.getElementById('statAvg').textContent = formatearNumero(avg * 100) + '%';
+            document.getElementById('statP90').textContent = formatearNumero(p90 * 100) + '%';
+
+            if (ultimaPrediccion) {
+                ultimaPrediccion.stats = { max, avg, p90 };
+            }
+        }
+
+        function exportarCSV() {
+            if (!ultimaPrediccion) {
+                alert('Genera una predicción antes de exportar.');
+                return;
+            }
+
+            const encabezados = ['latitud', 'longitud', 'riesgo_normalizado'];
+            const filas = ultimaPrediccion.datos.map(p => [p[0], p[1], p[2]]);
+            const contenido = [encabezados.join(','), ...filas.map(f => f.join(','))].join('\n');
+
+            const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `prediccion_${ultimaPrediccion.zona}_${ultimaPrediccion.fecha}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function alternarMarcadores() {
+            if (!markersLayer) return;
+            const btn = document.getElementById('btnToggleMarkers');
+            const visible = btn.dataset.visible === 'true';
+
+            if (visible) {
+                map.removeLayer(markersLayer);
+                btn.dataset.visible = 'false';
+                btn.innerHTML = '<i class="fas fa-map-pin"></i> Mostrar puntos';
+            } else {
+                markersLayer.addTo(map);
+                btn.dataset.visible = 'true';
+                btn.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar puntos';
+            }
+        }
+
+        document.getElementById('filtroRiesgo').value = '0';
+    </script>
+</body>
+
+</html>
