@@ -3,21 +3,12 @@ import glob
 import os
 
 #carga de dataset ecu911
-ruta_padre = os.path.join(os.pardir, os.pardir, "data")
+ruta_padre = "data"
 ruta_datos_originales = os.path.join(ruta_padre, "raw", "ecu911", "dataset")
 archivos_csv = glob.glob(os.path.join(ruta_datos_originales, "*.csv"))
 catalogo_parroquias = os.path.join(ruta_padre, "processed","catalogo_parroquias_ecuador.csv")
 
-RUTA_ENTRADA = os.path.join("data", "raw", "ECU911", "dataset")
-RUTA_SALIDA = os.path.join("data", "raw", "ECU911", "ecu911_unificado.csv")
-RUTA_CATALOGO = os.path.join(
-    "data", "processed", "catalogo_parroquias_ecuador.csv"
-)
-
-
-
-patron_busqueda = os.path.join(RUTA_ENTRADA, "*.csv")
-archivos_csv = glob.glob(patron_busqueda)
+nombre_datos_procesados = os.path.join(ruta_padre,"raw","ecu911","ecu911_unificado.csv")
 
 lista_dfs = []
 
